@@ -17,15 +17,31 @@ public class HebbianGui extends JFrame {
     private final JPanel matrixPanel2 = new JPanel(new GridLayout(SIZE, SIZE));
     private final JPanel testPanel = new JPanel(new GridLayout(SIZE, SIZE));
     private final JButton trainButton = new JButton("Train");
-    private final JButton testButton = new JButton("Test");
-    private final JButton returnButton = new JButton("Return to Training");
-    private final JPanel trainingPanel = new JPanel(new GridLayout(1, 2));
-    private final JPanel testPanelContainer = new JPanel(new BorderLayout());
+    private static void weightAndBiasValidation (float[][] entryLetters,float[] weight, float bias){
+        float deltaTeste = 0.0f;
+        float[] test = new float[2];
 
-    private boolean trained = false;  // Variável para indicar se o treinamento foi realizado
-    private float[] weight;
-    private float bias;
-    private ruleAplication hebbRule;
+        for(int i = 0; i < 2; i++){
+            
+            for(int j = 0; j < 100; j++){
+                
+                deltaTeste = deltaTeste + (weight[j] * entryLetters[i][j]);
+
+            }
+
+            deltaTeste = deltaTeste + bias;
+
+            if(deltaTeste >= 0){
+                test[i] = 1;
+            }
+            else{
+                test[i] = -1;
+            }
+        }
+    }
+    
+}
+
     private float[] validation;
 
     public HebbianGui(float[][] entryLetters, ruleAplication hebbRule, float[] weight, float bias, float[] validation) {
