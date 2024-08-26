@@ -1,3 +1,5 @@
+import javax.swing.SwingUtilities;
+
 import PerceptronGUI;
 
 public class Main{
