@@ -1,88 +1,91 @@
+"""
+Rafael de Oliveira Évora
+MLP com AdaGrad
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Função para inicializar os pesos
-def inicializar_pesos(entradas, saídas, faixa=(-0.5, 0.5)):
-    return np.random.uniform(faixa[0], faixa[1], (entradas, saídas))
+# Função alvo para aproximação
+def target_function(x):
+    return x**2
 
-# Função de ativação (tangente hiperbólica)
-def ativacao(x):
-    return np.tanh(x)
+# Obtenção do texto da função alvo diretamente do código
+import inspect
+funcao_alvo_str = inspect.getsource(target_function).strip().split(":")[1].strip()
 
-# Derivada da função de ativação
-def derivada_ativacao(x):
-    return 1 - np.tanh(x)**2
+# Configurações da rede neural
+entradas = 1                  # Número de entradas
+camadas_ocultas = [100, 50]   # Número de neurônios em cada camada oculta
+alfa = 0.005                  # Taxa de aprendizado
+erro_tolerado = 0.0001        # Erro máximo permitido
+ciclos_maximos = 1000         # Número máximo de ciclos
+xmin, xmax = -1, 1            # Domínio da função
+npontos = 50                  # Número de pontos de dados
+epsilon = 1e-8                # Constante para evitar divisão por zero no AdaGrad
 
-# Gerar os dados de entrada e saída (função "estranha" para aproximação)
-def gerar_dados(tamanho, xmin, xmax):
-    x = np.linspace(xmin, xmax, tamanho).reshape(-1, 1)
-    y = x**2  # Exemplo de função "estranha"
-    return x, y
+# Gera os dados de entrada e saída
+x_orig = np.linspace(xmin, xmax, npontos).reshape(-1, 1)
+t_orig = target_function(x_orig)
 
-# AdaGrad: Atualização dos pesos
-def adagrad_atualizacao(pesos, gradientes_acumulados, gradiente, alfa, epsilon=1e-8):
-    gradientes_acumulados += gradiente**2
-    return pesos - alfa * gradiente / (np.sqrt(gradientes_acumulados) + epsilon), gradientes_acumulados
+# Configurações da rede (pesos, biases e acumuladores do AdaGrad)
+camadas = [entradas] + camadas_ocultas + [1]  # Arquitetura da rede
+pesos = [np.random.uniform(-0.5, 0.5, (camadas[i], camadas[i + 1])) for i in range(len(camadas) - 1)]
+biases = [np.random.uniform(-0.5, 0.5, (1, camadas[i + 1])) for i in range(len(camadas) - 1)]
 
-# Configurações iniciais
-entradas = 1
-camadas_ocultas = [200, 100, 50, 25, 10, 5, 1]  # Número de neurônios em cada camada oculta
-saídas = 1
-alfa_inicial = 0.5
-erro_tolerado = 1e-3
-ciclos_maximos = 30000
-faixa_pesos = (-0.5, 0.5)
-
-# Dados de treinamento
-x, y = gerar_dados(100, -2 * np.pi, 2 * np.pi)
-
-# Inicializar pesos e gradientes acumulados para cada camada
-pesos = []
-grad_acumulados = []
-tamanhos_camadas = [entradas] + camadas_ocultas + [saídas]
-
-for i in range(len(tamanhos_camadas) - 1):
-    pesos.append(inicializar_pesos(tamanhos_camadas[i], tamanhos_camadas[i + 1], faixa_pesos))
-    grad_acumulados.append(np.zeros_like(pesos[-1]))
+# Acumuladores de gradientes para AdaGrad
+pesos_acumulados = [np.zeros_like(w) for w in pesos]
+biases_acumulados = [np.zeros_like(b) for b in biases]
 
 # Treinamento da rede
-for ciclo in range(ciclos_maximos):
-    # Exibir o ciclo atual
-    print(f"Ciclo: {ciclo + 1}", end='\r')  # "\r" sobrescreve a linha para não poluir a saída
+erro_total = 1
+ciclo = 0
+while erro_total > erro_tolerado and ciclo < ciclos_maximos:
+    erro_total = 0
+    for padrao in range(x_orig.shape[0]):
+        # Forward pass
+        ativacoes = [x_orig[padrao, :].reshape(1, -1)]
+        for w, b in zip(pesos, biases):
+            ativacoes.append(np.tanh(np.dot(ativacoes[-1], w) + b))
+        y = ativacoes[-1]
 
-    # Forward pass
-    ativacoes = [x]
-    for w in pesos[:-1]:
-        net = np.dot(ativacoes[-1], w)
-        ativacoes.append(ativacao(net))
-    
-    # Saída final
-    net_saida = np.dot(ativacoes[-1], pesos[-1])
-    saida_final = ativacao(net_saida)
+        # Cálculo do erro
+        erro = t_orig[padrao] - y
+        erro_total += 0.5 * np.sum(erro**2)
 
-    # Cálculo do erro
-    erro = y - saida_final
-    erro_total = np.mean(erro**2)
+        # Backpropagation
+        grad = erro * (1 - y**2)  # Gradiente da saída
+        for i in range(len(pesos) - 1, -1, -1):
+            grad_w = np.dot(ativacoes[i].T, grad)
+            grad_b = grad
 
-    if erro_total <= erro_tolerado:
-        print(f"\nConvergência atingida no ciclo {ciclo + 1}. Erro total: {erro_total}")
-        break
+            # Atualização dos acumuladores do AdaGrad
+            pesos_acumulados[i] += grad_w**2
+            biases_acumulados[i] += grad_b**2
 
-    # Backpropagation
-    gradientes = [erro * derivada_ativacao(net_saida)]
-    for i in range(len(pesos) - 1, 0, -1):
-        grad = np.dot(gradientes[0], pesos[i].T) * derivada_ativacao(np.dot(ativacoes[i - 1], pesos[i - 1]))
-        gradientes.insert(0, grad)
+            # Atualização dos pesos e biases com AdaGrad
+            pesos[i] += (alfa * grad_w) / (np.sqrt(pesos_acumulados[i]) + epsilon)
+            biases[i] += (alfa * grad_b) / (np.sqrt(biases_acumulados[i]) + epsilon)
 
-    # Atualização dos pesos com AdaGrad
-    for i in range(len(pesos)):
-        grad_pesos = np.dot(ativacoes[i].T, gradientes[i])
-        pesos[i], grad_acumulados[i] = adagrad_atualizacao(
-            pesos[i], grad_acumulados[i], grad_pesos, alfa_inicial
-        )
+            if i > 0:
+                grad = np.dot(grad, pesos[i].T) * (1 - ativacoes[i]**2)
+
+    ciclo += 1
+    print(f"Ciclo: {ciclo} | Erro total: {erro_total:.4f}")  # Log do progresso
+
+# Previsão final
+y_final = np.zeros_like(t_orig)
+for i in range(x_orig.shape[0]):
+    ativacoes = [x_orig[i, :].reshape(1, -1)]
+    for w, b in zip(pesos, biases):
+        ativacoes.append(np.tanh(np.dot(ativacoes[-1], w) + b))
+    y_final[i] = ativacoes[-1]
 
 # Visualização dos resultados
-plt.plot(x, y, label='Função real', color='red')
-plt.plot(x, saida_final, label='Aproximação', color='blue')
+plt.plot(x_orig, t_orig, color='red', label='Função Real')
+plt.plot(x_orig, y_final, color='blue', label='Aproximação pela MLP')
 plt.legend()
+plt.title(f"MLP - Função Alvo: {funcao_alvo_str}")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.grid()
 plt.show()
