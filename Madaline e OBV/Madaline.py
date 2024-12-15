@@ -5,11 +5,6 @@ from tkinter import messagebox
 
 # Configuração da Madaline
 class Madaline:
-    """
-    Classe que implementa uma rede neural Madaline. Esta classe treina a rede com dados fornecidos
-    e faz o reconhecimento de padrões. Adaptações foram feitas para corrigir o cálculo de erro e a atualização
-    dos pesos para melhorar o treinamento e o reconhecimento.
-    """
     def __init__(self, entradas, saidas, alfa=0.1, errotolerado=0.01):
         self.entradas = entradas
         self.saidas = saidas
@@ -22,14 +17,10 @@ class Madaline:
         self.v0 = np.random.uniform(-0.1, 0.1, saidas)
 
     def treinar(self, entAux, targAux):
-        """
-        Treina a rede Madaline com os padrões de entrada (entAux) e os alvos (targAux).
-        Corrige pesos iterativamente até que o erro seja tolerável ou o número máximo de ciclos seja atingido.
-        """
         padroes = entAux.shape[0]
         erro = 1
         ciclo = 0
-        max_ciclos = 30000  # Limite para evitar loops infinitos
+        max_ciclos = 10000 
 
         while erro > self.errotolerado and ciclo < max_ciclos:
             ciclo += 1
