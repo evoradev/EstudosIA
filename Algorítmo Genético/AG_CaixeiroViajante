@@ -1,0 +1,141 @@
+# Trabalho 10
+
+import numpy as np
+import random
+import tkinter as tk
+from tkinter import simpledialog, messagebox
+
+# Matriz de distancias conforme o print fornecido
+tabela_distancias = np.array([
+    [0, 106, 30, 138, 190, np.inf, 175, 89, 56, np.inf],  # Uberlandia
+    [106, 0, 205, 117, 265, 105, 110, np.inf, np.inf, 160],  # Uberaba
+    [30, 205, 0, 117, 221, np.inf, 205, 66, 47, np.inf],  # Araguari
+    [138, 117, 117, 0, np.inf, 265, np.inf, 163, np.inf, 186],  # Ituiutaba
+    [190, 265, 221, np.inf, 0, 137, np.inf, 114, np.inf, 75],  # Patos de Minas
+    [np.inf, 105, np.inf, 265, 137, 0, 185, np.inf, np.inf, 75],  # Frutal
+    [175, 110, 205, np.inf, np.inf, 185, 0, 145, np.inf, np.inf],  # Araxa
+    [89, np.inf, 66, 163, 114, np.inf, 145, 0, 111, np.inf],  # Monte Carmelo
+    [56, np.inf, 47, np.inf, np.inf, np.inf, np.inf, 111, 0, np.inf],  # Tupaciguara
+    [np.inf, 160, np.inf, 186, 75, 75, np.inf, np.inf, np.inf, 0]  # Campina Verde
+])
+
+# Interface para configuracao dos parametros
+def coletar_parametros():
+    root = tk.Tk()
+    root.withdraw()  # Ocultar a janela principal
+
+    parametros = {}
+    parametros['tamanho_populacao'] = int(simpledialog.askstring("Parametros", "Tamanho da populacao:", initialvalue=100))
+    parametros['num_geracoes'] = int(simpledialog.askstring("Parametros", "Numero de geracoes:", initialvalue=300))
+    parametros['taxa_mutacao'] = float(simpledialog.askstring("Parametros", "Taxa de mutacao (0-1):", initialvalue=0.2))
+    parametros['taxa_cruzamento'] = float(simpledialog.askstring("Parametros", "Taxa de cruzamento (0-1):", initialvalue=0.75))
+    parametros['tamanho_torneio'] = int(simpledialog.askstring("Parametros", "Tamanho do torneio:", initialvalue=5))
+    parametros['elitismo'] = int(simpledialog.askstring("Parametros", "Quantidade de elitismo:", initialvalue=5))
+    parametros['num_subpopulacoes'] = int(simpledialog.askstring("Parametros", "Numero de subpopulacoes:", initialvalue=3))
+    parametros['troca_geracoes'] = int(simpledialog.askstring("Parametros", "Intervalo para troca de individuos entre subpopulacoes:", initialvalue=50))
+    return parametros
+
+# Cidades
+nomes_cidades = ["Uberlandia", "Uberaba", "Araguari", "Ituiutaba", "Patos de Minas", 
+          "Frutal", "Araxa", "Monte Carmelo", "Tupaciguara", "Campina Verde"]
+indice_uberaba = 1
+cidades_disponiveis = [i for i in range(len(nomes_cidades)) if i != indice_uberaba]
+
+# Classe Rota representando um individuo do AG
+class Rota:
+    def __init__(self, indices_cidades):
+        self.cidades = np.array(indices_cidades, dtype=int)  # Garantir inteiros
+        self._distancia_total = None
+
+    @staticmethod
+    def aleatoria():
+        return Rota(np.random.permutation(cidades_disponiveis))
+
+    def calcular_distancia(self):
+        if self._distancia_total is None:
+            pares_cidades = [(indice_uberaba, self.cidades[0])] + [
+                (self.cidades[i], self.cidades[i + 1]) for i in range(len(self.cidades) - 1)
+            ]
+            distancias = [tabela_distancias[int(p1), int(p2)] for p1, p2 in pares_cidades]
+            self._distancia_total = np.sum(distancias)
+        return self._distancia_total
+
+    def cruzamento(self, outra_rota):
+        n = self.cidades.size
+        pontos_corte = sorted(np.random.choice(n, 2, replace=False))
+        filho1, filho2 = Rota.__realizar_cruzamento__(self.cidades, outra_rota.cidades, pontos_corte)
+        return Rota(filho1), Rota(filho2)
+
+    @staticmethod
+    def __realizar_cruzamento__(rota1, rota2, pontos_corte):
+        pc1, pc2 = pontos_corte
+        nova_rota1 = rota1[pc1:pc2]
+        nova_rota2 = rota2[pc1:pc2]
+        aux_rota1 = [cidade for cidade in rota1 if cidade not in nova_rota2]
+        aux_rota2 = [cidade for cidade in rota2 if cidade not in nova_rota1]
+        nova_rota1 = np.concatenate((aux_rota2[:pc1], nova_rota1, aux_rota2[pc1:]))
+        nova_rota2 = np.concatenate((aux_rota1[:pc1], nova_rota2, aux_rota1[pc1:]))
+        return nova_rota1, nova_rota2
+
+    def mutar(self):
+        i, j = np.random.choice(len(self.cidades), 2, replace=False)
+        self.cidades[i], self.cidades[j] = self.cidades[j], self.cidades[i]
+        self._distancia_total = None
+
+    def copiar(self):
+        return Rota(np.copy(self.cidades))
+
+# Funcao para criar populacao inicial
+def criar_populacao(tamanho_populacao):
+    return [Rota.aleatoria() for _ in range(tamanho_populacao)]
+
+# Algoritmo Genetico Multipopulacional
+def algoritmo_genetico_multipopulacional(parametros):
+    tamanho_populacao = parametros['tamanho_populacao']
+    num_subpopulacoes = parametros['num_subpopulacoes']
+    num_geracoes = parametros['num_geracoes']
+    taxa_mutacao = parametros['taxa_mutacao']
+    taxa_cruzamento = parametros['taxa_cruzamento']
+    tamanho_torneio = parametros['tamanho_torneio']
+    elitismo = parametros['elitismo']
+    troca_geracoes = parametros['troca_geracoes']
+
+    subpopulacoes = [criar_populacao(tamanho_populacao) for _ in range(num_subpopulacoes)]
+    for geracao in range(num_geracoes):
+        for idx, populacao in enumerate(subpopulacoes):
+            populacao.sort(key=lambda x: x.calcular_distancia())
+            nova_populacao = [ind.copiar() for ind in populacao[:elitismo]]
+            while len(nova_populacao) < tamanho_populacao:
+                pai1, pai2 = random.sample(populacao[:tamanho_torneio], 2)
+                if random.random() < taxa_cruzamento:
+                    filho1, filho2 = pai1.cruzamento(pai2)
+                else:
+                    filho1, filho2 = pai1.copiar(), pai2.copiar()
+                filho1.mutar(), filho2.mutar()
+                nova_populacao.extend([filho1, filho2])
+            subpopulacoes[idx] = nova_populacao[:tamanho_populacao]
+
+        if (geracao + 1) % troca_geracoes == 0:
+            for i in range(num_subpopulacoes - 1):
+                subpopulacoes[i][-1], subpopulacoes[i + 1][0] = subpopulacoes[i + 1][0], subpopulacoes[i][-1]
+            print(f"Troca de individuos na geracao {geracao + 1}")
+
+        print(f"Geracao {geracao + 1}: Melhor Distancia = {min([ind.calcular_distancia() for sub in subpopulacoes for ind in sub])}")
+
+    melhor_rota = min([ind for sub in subpopulacoes for ind in sub], key=lambda x: x.calcular_distancia())
+    return melhor_rota
+
+# Execucao do algoritmo
+if __name__ == "__main__":
+    parametros = coletar_parametros()
+    melhor_rota = algoritmo_genetico_multipopulacional(parametros)
+    lista_cidades = [nomes_cidades[indice_uberaba]] + [nomes_cidades[int(i)] for i in melhor_rota.cidades]
+    pares_cidades = [(lista_cidades[i], lista_cidades[i + 1]) for i in range(len(lista_cidades) - 1)]
+    distancias_pares = [tabela_distancias[nomes_cidades.index(p1), nomes_cidades.index(p2)] for p1, p2 in pares_cidades]
+
+    print("\nRota de cidades percorridas:")
+    for i, (par, distancia) in enumerate(zip(pares_cidades, distancias_pares)):
+        print(f"Passo {i + 1}: {par[0]} -> {par[1]} | Distancia: {distancia}")
+    
+    print(f"\nMelhor rota encontrada: {' -> '.join(lista_cidades)}")
+    print(f"Distancia total percorrida: {melhor_rota.calcular_distancia()}")
